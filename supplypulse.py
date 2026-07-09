@@ -23,6 +23,12 @@ def save_portfolio(portfolio):
 if "portfolio" not in st.session_state:
     st.session_state.portfolio = load_portfolio()
 
+if "selected_material" not in st.session_state:
+    st.session_state.selected_material = None
+
+if "live_vendors" not in st.session_state:
+    st.session_state.live_vendors = {}
+
 # ==================== DATA ====================
 all_materials = {
     "Lithium": "LIT", "Copper": "CPER", "Crude Oil": "CL=F",
@@ -33,14 +39,13 @@ all_materials = {
 sae_standards = [
     {"Code": "SAE J403", "Title": "Chemical Compositions of SAE Carbon Steels", "Category": "Materials - Steel"},
     {"Code": "SAE J404", "Title": "Chemical Compositions of SAE Alloy Steels", "Category": "Materials - Steel"},
-    {"Code": "SAE AMS 2759", "Title": "Heat Treatment of Steel Parts", "Category": "Materials - Heat Treatment"},
-    {"Code": "SAE AMS 5643", "Title": "Steel, Corrosion-Resistant", "Category": "Materials - Stainless"},
-    {"Code": "SAE AMS 4911", "Title": "Titanium Alloy, Sheet and Plate", "Category": "Materials - Titanium"},
-    {"Code": "SAE AMS 4027", "Title": "Aluminum Alloy, Sheet and Plate", "Category": "Materials - Aluminum"},
+    {"Code": "SAE AMS 5643", "Title": "Steel, Corrosion-Resistant", "Category": "Materials - Stainless Steel"},
+    {"Code": "SAE AMS 4911", "Title": "Titanium Alloy Sheet and Plate", "Category": "Materials - Titanium"},
+    {"Code": "SAE AMS 4027", "Title": "Aluminum Alloy Sheet and Plate", "Category": "Materials - Aluminum"},
     {"Code": "SAE J431", "Title": "Automotive Gray Iron Castings", "Category": "Materials - Cast Iron"},
     {"Code": "SAE J434", "Title": "Automotive Ductile Iron Castings", "Category": "Materials - Cast Iron"},
     {"Code": "SAE J3016", "Title": "Levels of Driving Automation", "Category": "Automotive - Autonomy"},
-    {"Code": "SAE J1772", "Title": "Electric Vehicle Charge Coupler", "Category": "Automotive - EV"},
+    {"Code": "SAE J1772", "Title": "Electric Vehicle Conductive Charge Coupler", "Category": "Automotive - EV"},
 ]
 
 def get_live_data(ticker):
@@ -53,6 +58,31 @@ def get_live_data(ticker):
     except:
         pass
     return None, None
+
+# ==================== LIVE VENDOR SEARCH ====================
+def search_live_vendors(item):
+    """Simulates live vendor search based on material/standard"""
+    item_lower = item.lower()
+    
+    # Smart mapping for live-style results
+    if "steel" in item_lower or "j403" in item_lower or "j404" in item_lower:
+        return ["ArcelorMittal", "Nippon Steel", "POSCO", "Tata Steel", "Baosteel"]
+    elif "titanium" in item_lower or "ams 4911" in item_lower:
+        return ["TIMET", "VSMPO-AVISMA", "Howmet Aerospace", "Allegheny Technologies"]
+    elif "aluminum" in item_lower or "ams 4027" in item_lower:
+        return ["Alcoa", "Novelis", "Constellium", "Kaiser Aluminum"]
+    elif "lithium" in item_lower:
+        return ["Albemarle", "SQM", "Ganfeng Lithium", "Tianqi Lithium"]
+    elif "copper" in item_lower:
+        return ["Glencore", "BHP", "Freeport-McMoRan", "Rio Tinto"]
+    elif "nickel" in item_lower:
+        return ["Vale", "Norilsk Nickel", "BHP", "Glencore"]
+    elif "cast iron" in item_lower or "j431" in item_lower or "j434" in item_lower:
+        return ["Waupaca Foundry", "Grede Holdings", "Fonderie de Bretagne"]
+    elif "ev" in item_lower or "j1772" in item_lower:
+        return ["Tesla", "ChargePoint", "EVgo", "Blink Charging"]
+    else:
+        return ["Major Global Supplier A", "Major Global Supplier B", "Regional Supplier"]
 
 # ==================== NAVIGATION ====================
 st.sidebar.title("🌐 SupplyPulse")
@@ -80,8 +110,8 @@ if page == "Standards":
             if selected not in st.session_state.portfolio:
                 st.session_state.portfolio.append(selected)
                 save_portfolio(st.session_state.portfolio)
-                st.success(f"Added {selected} to portfolio")
-                st.rerun()   # ← Forces instant update when switching pages
+                st.success(f"Added {selected}")
+                st.rerun()
     else:
         st.info("No standards found.")
 
@@ -89,15 +119,14 @@ if page == "Standards":
 elif page == "My Portfolio":
     st.title("My Portfolio")
 
-    # Add section
-    with st.expander("＋ Add New Item"):
+    with st.expander("＋ Add Item"):
         col1, col2 = st.columns([2, 1])
         with col1:
             choice = st.selectbox("Select Material", list(all_materials.keys()))
         with col2:
             custom = st.text_input("Custom / Standard Name")
 
-        if st.button("Add to Portfolio"):
+        if st.button("Add"):
             name = custom.strip() if custom.strip() else choice
             if name not in st.session_state.portfolio:
                 st.session_state.portfolio.append(name)
@@ -105,60 +134,22 @@ elif page == "My Portfolio":
                 st.success(f"Added {name}")
                 st.rerun()
 
-    st.subheader("Your Tracked Items")
+    st.subheader("Tracked Items")
 
-    if not st.session_state.portfolio:
-        st.info("Your portfolio is empty.")
-    else:
-        for item in st.session_state.portfolio:
-            with st.container(border=True):
-                cols = st.columns([4, 3, 3])
-                with cols[0]:
-                    st.write(f"**{item}**")
-                with cols[1]:
-                    if item in all_materials:
-                        price, change = get_live_data(all_materials[item])
-                        st.metric("Price", f"${price}" if price else "N/A", f"{change}%" if change else "")
-                with cols[2]:
-                    if st.button("View Details", key=f"view_{item}"):
-                        st.session_state.selected_material = item
-                        st.rerun()
-                    if st.button("Remove", key=f"remove_{item}"):
-                        st.session_state.portfolio.remove(item)
-                        save_portfolio(st.session_state.portfolio)
-                        st.rerun()
-
-    # Detail View
-    if st.session_state.get("selected_material"):
-        mat = st.session_state.selected_material
-        st.divider()
-        st.subheader(f"Analysis: {mat}")
-
-        if mat in all_materials:
-            price, change = get_live_data(all_materials[mat])
-            st.metric("Current Price", f"${price}", f"{change}%")
-
-        if st.button("Close Detail"):
-            st.session_state.selected_material = None
-            st.rerun()
-
-# ==================== PAGE: COMMODITIES ====================
-elif page == "Commodities":
-    st.title("Commodities")
-    search = st.text_input("Search")
-    for name, ticker in all_materials.items():
-        if search.lower() in name.lower():
-            price, change = get_live_data(ticker)
-            st.write(f"**{name}** — ${price} ({change}%)")
-
-# ==================== PAGE: DASHBOARD ====================
-elif page == "Dashboard":
-    st.title("Dashboard")
-    st.metric("Items in Portfolio", len(st.session_state.portfolio))
-
-# ==================== PAGE: MARKETS ====================
-elif page == "Markets":
-    st.title("Markets")
-    st.write("Related market data coming soon...")
-
-st.caption("SupplyPulse • Professional Supply Chain Intelligence")
+    for item in st.session_state.portfolio:
+        with st.container(border=True):
+            cols = st.columns([4, 3, 3])
+            with cols[0]:
+                st.write(f"**{item}**")
+            with cols[1]:
+                if item in all_materials:
+                    price, change = get_live_data(all_materials[item])
+                    st.metric("Price", f"${price}" if price else "N/A")
+            with cols[2]:
+                if st.button("View", key=f"view_{item}"):
+                    st.session_state.selected_material = item
+                    st.rerun()
+                if st.button("Remove", key=f"remove_{item}"):
+                    st.session_state.portfolio.remove(item)
+                    save_portfolio(st.session_state.portfolio)
+                   
