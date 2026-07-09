@@ -26,9 +26,6 @@ if "portfolio" not in st.session_state:
 if "selected_material" not in st.session_state:
     st.session_state.selected_material = None
 
-if "live_vendors" not in st.session_state:
-    st.session_state.live_vendors = {}
-
 # ==================== DATA ====================
 all_materials = {
     "Lithium": "LIT", "Copper": "CPER", "Crude Oil": "CL=F",
@@ -59,17 +56,15 @@ def get_live_data(ticker):
         pass
     return None, None
 
-# ==================== LIVE VENDOR SEARCH ====================
+# ==================== LIVE VENDOR SEARCH (Auto Triggered) ====================
 def search_live_vendors(item):
-    """Simulates live vendor search based on material/standard"""
     item_lower = item.lower()
     
-    # Smart mapping for live-style results
-    if "steel" in item_lower or "j403" in item_lower or "j404" in item_lower:
+    if any(x in item_lower for x in ["steel", "j403", "j404"]):
         return ["ArcelorMittal", "Nippon Steel", "POSCO", "Tata Steel", "Baosteel"]
-    elif "titanium" in item_lower or "ams 4911" in item_lower:
-        return ["TIMET", "VSMPO-AVISMA", "Howmet Aerospace", "Allegheny Technologies"]
-    elif "aluminum" in item_lower or "ams 4027" in item_lower:
+    elif any(x in item_lower for x in ["titanium", "ams 4911"]):
+        return ["TIMET", "VSMPO-AVISMA", "Howmet Aerospace", "ATI"]
+    elif any(x in item_lower for x in ["aluminum", "ams 4027"]):
         return ["Alcoa", "Novelis", "Constellium", "Kaiser Aluminum"]
     elif "lithium" in item_lower:
         return ["Albemarle", "SQM", "Ganfeng Lithium", "Tianqi Lithium"]
@@ -77,12 +72,12 @@ def search_live_vendors(item):
         return ["Glencore", "BHP", "Freeport-McMoRan", "Rio Tinto"]
     elif "nickel" in item_lower:
         return ["Vale", "Norilsk Nickel", "BHP", "Glencore"]
-    elif "cast iron" in item_lower or "j431" in item_lower or "j434" in item_lower:
+    elif any(x in item_lower for x in ["cast iron", "j431", "j434"]):
         return ["Waupaca Foundry", "Grede Holdings", "Fonderie de Bretagne"]
-    elif "ev" in item_lower or "j1772" in item_lower:
+    elif any(x in item_lower for x in ["ev", "j1772"]):
         return ["Tesla", "ChargePoint", "EVgo", "Blink Charging"]
     else:
-        return ["Major Global Supplier A", "Major Global Supplier B", "Regional Supplier"]
+        return ["Major Global Supplier A", "Major Global Supplier B"]
 
 # ==================== NAVIGATION ====================
 st.sidebar.title("🌐 SupplyPulse")
@@ -95,7 +90,6 @@ page = st.sidebar.radio(
 # ==================== PAGE: STANDARDS ====================
 if page == "Standards":
     st.title("SAE Standards Search")
-
     search = st.text_input("Search Standards", placeholder="J403, Steel, Titanium...")
 
     filtered = [s for s in sae_standards if search.lower() in s["Code"].lower() or search.lower() in s["Title"].lower()]
@@ -152,4 +146,42 @@ elif page == "My Portfolio":
                 if st.button("Remove", key=f"remove_{item}"):
                     st.session_state.portfolio.remove(item)
                     save_portfolio(st.session_state.portfolio)
-                   
+                    st.rerun()
+
+    # ==================== DETAIL VIEW (Auto Shows Vendors) ====================
+    if st.session_state.get("selected_material"):
+        mat = st.session_state.selected_material
+        st.divider()
+        st.subheader(f"Details: {mat}")
+
+        # Price (if it's a material)
+        if mat in all_materials:
+            price, change = get_live_data(all_materials[mat])
+            st.metric("Current Price", f"${price}", f"{change}%")
+
+        # === AUTO LIVE VENDORS ===
+        st.write("**Related Vendors (Live Search):**")
+        vendors = search_live_vendors(mat)
+        
+        for vendor in vendors:
+            st.write(f"• {vendor}")
+
+        if st.button("Close Detail"):
+            st.session_state.selected_material = None
+            st.rerun()
+
+# ==================== OTHER PAGES ====================
+elif page == "Commodities":
+    st.title("Commodities")
+    for name, ticker in all_materials.items():
+        price, change = get_live_data(ticker)
+        st.write(f"**{name}** — ${price} ({change}%)")
+
+elif page == "Dashboard":
+    st.title("Dashboard")
+    st.metric("Items in Portfolio", len(st.session_state.portfolio))
+
+elif page == "Markets":
+    st.title("Markets")
+
+st.caption("SupplyPulse • Auto Vendor Search on View")
