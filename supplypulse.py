@@ -1,112 +1,101 @@
 import streamlit as st
 import pandas as pd
 import yfinance as yf
-from datetime import datetime
 
 st.set_page_config(page_title="SupplyPulse", layout="wide", initial_sidebar_state="expanded")
 
-# Custom CSS
 st.markdown("""
 <style>
-    .material-circle {
-        width: 160px; height: 160px; border-radius: 50%; 
-        display: flex; align-items: center; justify-content: center;
-        font-size: 17px; font-weight: bold; color: white;
-        box-shadow: 0 6px 20px rgba(0,0,0,0.15);
-        cursor: pointer; transition: all 0.3s;
-    }
-    .material-circle:hover {transform: scale(1.1); box-shadow: 0 10px 30px rgba(0,0,0,0.2);}
+    .vendor-card { border: 1px solid #ddd; border-radius: 16px; padding: 16px; margin: 10px 0; background: white; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+    .material-circle { width: 130px; height: 130px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: bold; color: white; box-shadow: 0 6px 20px rgba(0,0,0,0.1); }
 </style>
 """, unsafe_allow_html=True)
 
 st.title("🌐 SupplyPulse")
-st.caption("Real-time Supply Chain Intelligence")
+st.caption("Procurement Intelligence Platform • Inspired by Coupa")
+
+# Search Bar
+search = st.text_input("🔍 Search Materials or Vendors", placeholder="e.g. Lithium, Steel Supplier, Tesla vendor...")
 
 # Sidebar
-st.sidebar.header("🏢 Select Company")
-businesses = ["AutoForge Motors", "ElectroSteel Inc.", "GreenBattery Solutions", "AeroCast Manufacturing"]
-selected_business = st.sidebar.selectbox("Company", businesses)
+st.sidebar.header("🏢 Company")
+company = st.sidebar.selectbox("Select Company", ["AutoForge Motors", "GreenBattery Solutions", "ElectroSteel Inc."])
 
-# Real Materials with Tickers
-material_data = {
-    "Cast Iron": {"ticker": "XME", "color": "#4A90E2", "category": "Steel"},
-    "Nodular Cast Iron": {"ticker": "XME", "color": "#50C878", "category": "Steel"},
-    "Cast Steel": {"ticker": "SLX", "color": "#FF9500", "category": "Steel"},
-    "Chrome Nickel Steel": {"ticker": "NUE", "color": "#E74C3C", "category": "Stainless"},
-    "Austenitic Stainless": {"ticker": "NUE", "color": "#9B59B6", "category": "Stainless"},
-    "Lithium": {"ticker": "LIT", "color": "#00BFFF", "category": "Battery"},
-    "Copper": {"ticker": "CPER", "color": "#FF6B00", "category": "Metal"}
+# Mock Data
+materials = {
+    "Lithium": {"ticker": "LIT", "color": "#00BFFF", "avg_price": 28500, "risk": 82},
+    "Copper": {"ticker": "CPER", "color": "#FF6B00", "avg_price": 9200, "risk": 65},
+    "Steel": {"ticker": "XME", "color": "#4A90E2", "avg_price": 1450, "risk": 58},
+    "Nickel": {"ticker": "NUE", "color": "#E74C3C", "avg_price": 18500, "risk": 78}
 }
 
-# Fetch real prices
-@st.cache_data(ttl=60)  # Refresh every minute
-def get_price(ticker):
-    try:
-        data = yf.Ticker(ticker).history(period="5d")
-        if not data.empty:
-            price = round(data['Close'].iloc[-1], 2)
-            change = round(data['Close'].pct_change().iloc[-1] * 100, 2)
-            return price, change
-    except:
-        pass
-    return 0, 0
+vendors = {
+    "Albemarle Corp": {"material": "Lithium", "price": 29200, "lead_time": "45 days", "reliability": "92%", "risk": "Medium", "location": "USA / Chile"},
+    "Glencore": {"material": "Copper", "price": 9350, "lead_time": "30 days", "reliability": "88%", "risk": "Low", "location": "Global"},
+    "ArcelorMittal": {"material": "Steel", "price": 1380, "lead_time": "25 days", "reliability": "95%", "risk": "Low", "location": "Europe"},
+    "Sumitomo Metal": {"material": "Nickel", "price": 19200, "lead_time": "60 days", "reliability": "85%", "risk": "High", "location": "Japan"}
+}
 
-# Main UI
-if "selected_material" not in st.session_state:
-    st.subheader(f"Raw Materials Portfolio — {selected_business}")
-    
-    cols = st.columns(3)
-    for i, (name, info) in enumerate(material_data.items()):
-        price, change = get_price(info["ticker"])
-        
-        with cols[i % 3]:
-            if st.button(name, key=name, use_container_width=True):
-                st.session_state.selected_material = name
-                st.rerun()
-            
+# Filter based on search
+filtered_materials = {k: v for k, v in materials.items() if search.lower() in k.lower()}
+filtered_vendors = {k: v for k, v in vendors.items() if search.lower() in k.lower() or search.lower() in v["material"].lower()}
+
+# Main Content
+if search:
+    st.subheader(f"Results for '{search}'")
+else:
+    st.subheader(f"Active Procurement — {company}")
+
+# Materials Section
+st.markdown("### Raw Materials")
+cols = st.columns(4)
+for i, (name, data) in enumerate(filtered_materials.items() or materials.items()):
+    with cols[i % 4]:
+        price, _ = get_price(data["ticker"]) if 'get_price' in globals() else (data["avg_price"], 0)
+        if st.button(name, key=f"mat_{name}"):
+            st.session_state.selected = ("material", name)
+        st.markdown(f'<div style="background:{data["color"]};" class="material-circle">{name}</div>', unsafe_allow_html=True)
+        st.metric("", f"${price:,}", f"Risk: {data['risk']}%")
+
+# Vendors Section
+st.markdown("### Approved Vendors")
+for name, info in filtered_vendors.items() or vendors.items():
+    with st.container():
+        col1, col2 = st.columns([1, 4])
+        with col1:
+            if st.button("View", key=f"ven_{name}"):
+                st.session_state.selected = ("vendor", name)
+        with col2:
             st.markdown(f"""
-            <div style="background-color:{info['color']};" class="material-circle">
-                {name.split()[-1] if len(name.split()) > 1 else name}
+            <div class="vendor-card">
+                <h4>{name}</h4>
+                <b>Material:</b> {info['material']} | 
+                <b>Price/ton:</b> ${info['price']:,} | 
+                <b>Lead Time:</b> {info['lead_time']} | 
+                <b>Reliability:</b> {info['reliability']}
             </div>
             """, unsafe_allow_html=True)
-            
-            delta = f"{'↑' if change > 0 else '↓'} {abs(change)}%" if change != 0 else ""
-            st.metric(name, f"${price}", delta, delta_color="normal")
-else:
-    # Detailed Material View
-    mat = st.session_state.selected_material
-    info = material_data[mat]
-    price, change = get_price(info["ticker"])
 
-    st.title(f"{mat} — Live Analysis")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Current Price", f"${price}", f"{change}%")
-    with col2:
-        st.metric("Risk Level", "68/100", "↑ Medium")
-    with col3:
-        st.metric("Bottleneck Risk", "High", "Next 45 days")
+# Detailed View
+if "selected" in st.session_state:
+    typ, item = st.session_state.selected
+    if typ == "vendor":
+        info = vendors[item]
+        st.title(f"Vendor Profile: {item}")
+        st.metric("Current Price", f"${info['price']:,}")
+        st.write(f"**Material:** {info['material']}")
+        st.write(f"**Lead Time:** {info['lead_time']}")
+        st.write(f"**Location:** {info['location']}")
+        st.write(f"**Risk Level:** {info['risk']}")
+        
+        if st.button("Back to Dashboard"):
+            del st.session_state.selected
 
-    st.divider()
+    elif typ == "material":
+        # You can expand this later
+        st.title(f"Material Deep Dive: {item}")
+        st.info("Full analytics page would go here (forecasts, multiple vendors, etc.)")
+        if st.button("Back"):
+            del st.session_state.selected
 
-    tab1, tab2, tab3 = st.tabs(["📈 Live Trends", "🔮 Forecast & Bottlenecks", "📰 Market Signals"])
-
-    with tab1:
-        st.subheader("6-Month Price Trend")
-        hist = yf.download(info["ticker"], period="6mo")
-        st.line_chart(hist['Close'])
-
-    with tab2:
-        st.subheader("Forecast")
-        st.info(f"Projected price increase of 8-15% for {mat} in next 60 days due to supply constraints.")
-        st.warning("Potential bottleneck: Raw material availability dropping")
-
-    with tab3:
-        st.subheader("Latest Signals")
-        st.success("📰 New mining project approved in Chile (positive for Lithium/Copper)")
-
-    if st.button("← Back to All Materials"):
-        del st.session_state.selected_material
-        st.rerun()
-
-st.caption("Real-time data powered by Yahoo Finance • Updated every 60 seconds")
+st.caption("SupplyPulse — Procurement Intelligence Platform")
